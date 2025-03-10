@@ -1,56 +1,49 @@
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
+import pandas as pd
 
-# ✅ Initialize Flask App
-app = Flask(__name__)
-
-# ✅ Load the trained model
-model_path = "models/final_fraud_detection_model.pkl"  # Keep relative path
+# Load the trained model
+model_path = r"C:\Users\iamra\Desktop\CAPSTONE Project\credit-card-fraud-detection\models\final_fraud_detection_model.pkl"
 model = joblib.load(model_path)
 
-# ✅ Define feature names (Ensure it matches the trained model)
-final_features = ["V14", "V10", "V12", "V4", "V17", "V3", "V7", "V16", "V11", "V18", "V9", "V21", "Amount"]
+# ✅ Get the expected feature names from the trained model
+expected_features = model.feature_names_in_.tolist()  # Ensure it's a list
+
+app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "Flask API is running on Render! Use /predict for fraud detection."})
+    return jsonify({"message": "Flask API is running! Use /predict for fraud detection."})
 
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # ✅ Get JSON data from request
+        # ✅ Step 1: Get JSON Data from API Request
         data = request.get_json()
 
-        # ✅ Ensure the "features" key exists
-        if "features" not in data:
-            return jsonify({"error": "Missing 'features' key in request."}), 400
-        
-        # ✅ Convert input data to NumPy array
-        features = np.array(data["features"]).reshape(1, -1)
+        # ✅ Step 2: Convert JSON Data to Pandas DataFrame
+        input_data = pd.DataFrame([data["features"]], columns=expected_features[:len(data["features"])])
 
-        # ✅ Ensure correct number of features
-        if features.shape[1] != len(final_features):
-            return jsonify({
-                "error": f"Expected {len(final_features)} features, but got {features.shape[1]}."
-            }), 400
+        # ✅ Step 3: Ensure All 30 Features Are Present
+        for feature in expected_features:
+            if feature not in input_data.columns:
+                input_data[feature] = 0  # Fill missing features with 0
 
-        # ✅ Get fraud probability
-        fraud_probability = model.predict_proba(features)[:, 1][0]
+        # ✅ Step 4: Convert Data to Model-Readable Format
+        input_array = input_data[expected_features].values  # Ensure correct feature order
 
-        # ✅ Apply threshold for classification
-        threshold = 0.19  # Adjusted based on model optimization
-        prediction = "Fraud Alert!" if fraud_probability >= threshold else "Safe Transaction"
+        # ✅ Step 5: Make Prediction
+        fraud_probability = model.predict_proba(input_array)[:, 1][0]
+        fraud_label = "Fraud Alert!" if fraud_probability >= 0.19 else "Safe Transaction"
 
         return jsonify({
-            "fraud_probability": round(float(fraud_probability), 4),
-            "prediction": prediction
+            "fraud_probability": round(fraud_probability, 4),
+            "prediction": fraud_label
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
 
-# ✅ Run Flask app on Render (Removes localhost issue)
 if __name__ == "__main__":
-    from waitress import serve  # Production WSGI server
-    serve(app, host="0.0.0.0", port=10000)  # Render uses dynamic ports
+    app.run(debug=True)
