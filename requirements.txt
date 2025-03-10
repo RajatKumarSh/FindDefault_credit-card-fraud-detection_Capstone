@@ -1,12 +1,8 @@
+flask
+gunicorn
+waitress
 numpy
 pandas
-matplotlib
-seaborn
 scikit-learn
 imbalanced-learn
-xgboost
-shap
-lime
 joblib
-flask
-jupyter
